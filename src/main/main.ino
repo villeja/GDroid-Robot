@@ -1,6 +1,8 @@
-    
+
 #include <Wire.h>
 #include <VL53L0X.h>
+
+#include <WiFi.h>
 
 #define PIN_MOTLE_SPD 23
 #define PIN_MOTLE_BAC 22
@@ -20,14 +22,19 @@
 #define PIN_SCL 7
 
 const int sensorNr = 3;
+int distance[sensorNr];
 
-int xshutPins[] = {2, 10, 11};
+int xshutPins[] = {PIN_SENS_1, PIN_SENS_2, PIN_SENS_3};
 
 VL53L0X sensors[sensorNr];
 
 void setup() {
   Serial.begin(19200);
-  Wire.begin(6, 7);
+  Wire.begin(PIN_SDA, PIN_SCL);
+  if (initializeSensors() == 404) {
+    Serial.println("Sensors failed");
+    while (1) {}
+  }
   // put your setup code here, to run once:
   initializeMotors();
   Serial.begin(19200);
