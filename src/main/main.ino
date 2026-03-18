@@ -3,6 +3,7 @@
 #include <VL53L0X.h>
 
 #include <WiFi.h>
+#include <WebServer.h>
 
 #define PIN_MOTLE_SPD 23
 #define PIN_MOTLE_BAC 22
@@ -20,6 +21,12 @@
 
 #define PIN_SDA 6
 #define PIN_SCL 7
+
+WebServer server(80);
+
+String currentCommand = "";
+int currentSpeed = 0;
+const int defaultSpeed = 100;
 
 const int sensorNr = 3;
 int distance[sensorNr];
@@ -43,15 +50,24 @@ void setup() {
   int ssid_hidden = 0;
   int max_connection = 4;
   WiFi.softAP("ESP-PAR", "passphrase", channel, ssid_hidden, max_connection, false, WIFI_AUTH_WPA3_PSK);
+
+  server.onNotFound(handleCommand);
+  
+  // Start server
+  server.begin();
+  Serial.println("HTTP server started");
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  /*
   for (int i = 0; i < sensorNr; i++) {
     distance[i] = sensors[i].readRangeContinuousMillimeters();
     if (sensors[i].timeoutOccurred()) { Serial.print(" TIMEOUT"); }
   }
   driveLogic(distance);
+  */
+  server.handleClient();
 }
 
 int initializeSensors() {
@@ -191,4 +207,87 @@ void driveLogic(int sensorReadings[]) {
     stopAtWall(sensorReadings[1]);
     turnAtCurve(sensorReadings[0], sensorReadings[1], sensorReadings[2]);
     
+}
+
+void handleCommand() {
+  String request = server.uri();
+  if (request.startsWith("/")) {
+    request = request.substring(1);
+  }
+  
+  // Parse command and speed (if provided)
+  if (request.indexOf(":") != -1) {
+    int colonIndex = request.indexOf(":");
+    currentCommand = request.substring(0, colonIndex);
+    String speedStr = request.substring(colonIndex + 1);
+    currentSpeed = speedStr.toInt();
+  } else {
+    currentCommand = request;
+    // Only assign default speed to movement commands (F, B, L, R)
+    // S, X, Y, Z should have speed = 0
+    if (currentCommand == "F" || currentCommand == "B" || 
+        currentCommand == "L" || currentCommand == "R") {
+      currentSpeed = defaultSpeed;
+    } else {
+      currentSpeed = 0; // For S, X, Y, Z and any other special commands
+    }
+  }
+  
+  // Process command and control robot
+  controlRobot();
+  displayCommand();
+  
+  // Send response back to client
+  server.send(200, "text/plain", "Command received: " + request);
+}
+
+void controlRobot() {
+    driveStop();
+    if (currentCommand == "F") {
+        driveForward(currentSpeed);
+    }
+    if (currentCommand == "B") {
+        driveBackward(currentSpeed);
+    }
+    if (currentCommand == "L") {
+        driveTurnLeft(currentSpeed);
+    }
+    if (currentCommand == "R") {
+        driveTurnRight(currentSpeed);
+    }
+    if (currentCommand == "S") {
+        driveStop();
+    }
+}
+
+void displayCommand() {
+  Serial.println("-------------------");
+  Serial.print("Received Command: ");
+  Serial.println(currentCommand);
+  
+  // Only display speed for commands that use it
+  if (currentSpeed > 0 && (currentCommand == "F" || currentCommand == "B" || 
+                           currentCommand == "L" || currentCommand == "R")) {
+    Serial.print("Speed Value: ");
+    Serial.println(currentSpeed);
+  }
+  
+  if (currentCommand == "F") {
+    Serial.println("Action: Moving Forward");
+  } else if (currentCommand == "B") {
+    Serial.println("Action: Moving Backward");
+  } else if (currentCommand == "L") {
+    Serial.println("Action: Turning Left");
+  } else if (currentCommand == "R") {
+    Serial.println("Action: Turning Right");
+  } else if (currentCommand == "S") {
+    Serial.println("Action: Stop");
+  } else if (currentCommand == "X") {
+    Serial.println("Action: Custom X");
+  } else if (currentCommand == "Y") {
+    Serial.println("Action: Custom Y");
+  } else if (currentCommand == "Z") {
+    Serial.println("Action: Custom Z");
+  }
+  Serial.println("-------------------");
 }
