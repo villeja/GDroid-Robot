@@ -37,26 +37,21 @@ void setup() {
   }
   // put your setup code here, to run once:
   initializeMotors();
-  Serial.begin(19200);
+  WiFi.mode(WIFI_AP);
+  delay(10);
+  int channel = 1;
+  int ssid_hidden = 0;
+  int max_connection = 4;
+  WiFi.softAP("ESP-PAR", "passphrase", channel, ssid_hidden, max_connection, false, WIFI_AUTH_WPA3_PSK);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  driveForward(100);
-  Serial.println("FORWARD!!!");
-  delay(5000);
-  driveTurnRight(100);
-  Serial.println("Lets go right..");
-  delay(900);
-  driveBackward(100);
-  Serial.println("RETREAT!!! WE DONE GOOFED UP!!!");
-  delay(5000);
-  driveTurnLeft(100);
-  Serial.println("I want to go left now.");
-  delay(900);
-  driveStop();
-  Serial.println("Im bored, gonna wait until I want to do stuff again..");
-  delay(10000);
+  for (int i = 0; i < sensorNr; i++) {
+    distance[i] = sensors[i].readRangeContinuousMillimeters();
+    if (sensors[i].timeoutOccurred()) { Serial.print(" TIMEOUT"); }
+  }
+  driveLogic(distance);
 }
 
 int initializeSensors() {
@@ -73,11 +68,12 @@ int initializeSensors() {
     if (!sensors[i].init())
     {
       Serial.println("Failed to detect and initialize sensor!");
-      while (1) {}
+      return 404;
     }
     sensors[i].setAddress(0x2A + i);
     sensors[i].startContinuous();
   }
+  return 0;
 }
 
 
@@ -137,6 +133,11 @@ int motorRun(int motorSpeed, int MotorID) {
     return 101;
 }
 
+void driveFancy(int speedLeft, int speedRight) {
+    motorRun(speedLeft, 'L');
+    motorRun(speedRight, 'R');
+}
+
 void driveForward(int speed) {
     motorRun(speed, 'L');
     motorRun(speed, 'R');
@@ -160,4 +161,34 @@ void driveTurnRight(int speed) {
 void driveStop() {
     motorRun(0, 'L');
     motorRun(0, 'R');
+}
+
+int stopAtWall(int sensorFront) {
+    if (sensorFront < 100) {
+        driveStop();
+        return 3;
+    } else if (sensorFront < 300) {
+        driveForward(100);
+        return 2;
+    } else {
+        driveForward(255);
+        return 1;
+    }
+}
+
+void turnAtCurve(int sensorLeft,int sensorFront, int sensorRight) {
+    
+    if (sensorLeft < 250) {
+        driveFancy(100, 200);
+    } 
+    if (sensorRight < 250) {
+        driveFancy(200, 100);
+    }
+
+}
+
+void driveLogic(int sensorReadings[]) {
+    stopAtWall(sensorReadings[1]);
+    turnAtCurve(sensorReadings[0], sensorReadings[1], sensorReadings[2]);
+    
 }
