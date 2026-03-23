@@ -21,6 +21,13 @@
 #define PIN_SDA 6
 #define PIN_SCL 7
 
+#define TURN_TRIGGER_DISTANCE 400 // distance to turn at in mm
+#define REVERSE_TRIGGER_DISTANCE 100 // distance to reverse and turn at in mm
+#define SLOW_TRIGGER_DISTANCE 500 // distance to slow down at in mm
+
+#define SERIAL_BAUDS 19200 // serial baud for debugging
+
+
 const int sensorNr = 3;
 int distance[sensorNr];
 
@@ -29,7 +36,7 @@ int xshutPins[] = {PIN_SENS_1, PIN_SENS_2, PIN_SENS_3};
 VL53L0X sensors[sensorNr];
 
 void setup() {
-  Serial.begin(19200);
+  Serial.begin(SERIAL_BAUDS);
   Wire.begin(PIN_SDA, PIN_SCL);
   if (initializeSensors() == 404) {
     Serial.println("Sensors failed");
@@ -37,12 +44,12 @@ void setup() {
   }
   // put your setup code here, to run once:
   initializeMotors();
-  WiFi.mode(WIFI_AP);
-  delay(10);
-  int channel = 1;
-  int ssid_hidden = 0;
-  int max_connection = 4;
-  WiFi.softAP("ESP-PAR", "passphrase", channel, ssid_hidden, max_connection, false, WIFI_AUTH_WPA3_PSK);
+  // WiFi.mode(WIFI_AP);
+  // delay(10);
+  // int channel = 1;
+  // int ssid_hidden = 0;
+  // int max_connection = 4;
+  // WiFi.softAP("ESP-PAR", "passphrase", channel, ssid_hidden, max_connection, false, WIFI_AUTH_WPA3_PSK);
 }
 
 void loop() {
@@ -163,11 +170,12 @@ void driveStop() {
     motorRun(0, 'R');
 }
 
-int stopAtWall(int sensorFront) {
-    if (sensorFront < 100) {
-        driveStop();
+int reverseAtWall(int sensorFront) {
+    if (sensorFront < REVERSE_TRIGGER_DISTANCE) {
+        driveBackward(255);
+        delay(700);
         return 3;
-    } else if (sensorFront < 300) {
+    } else if (sensorFront < SLOW_TRIGGER_DISTANCE) {
         driveForward(100);
         return 2;
     } else {
@@ -176,19 +184,19 @@ int stopAtWall(int sensorFront) {
     }
 }
 
-void turnAtCurve(int sensorLeft,int sensorFront, int sensorRight) {
+void turnAtCurve(int sensorLeft, int sensorFront, int sensorRight) {
     
-    if (sensorLeft < 250) {
+    if (sensorLeft < TURN_TRIGGER_DISTANCE) {
         driveFancy(100, 200);
     } 
-    if (sensorRight < 250) {
+    if (sensorRight < TURN_TRIGGER_DISTANCE) {
         driveFancy(200, 100);
     }
 
 }
 
 void driveLogic(int sensorReadings[]) {
-    stopAtWall(sensorReadings[1]);
+    reverseAtWall(sensorReadings[1]);
     turnAtCurve(sensorReadings[0], sensorReadings[1], sensorReadings[2]);
     
 }
