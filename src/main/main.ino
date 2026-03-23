@@ -21,7 +21,7 @@
 #define PIN_SDA 6
 #define PIN_SCL 7
 
-#define TURN_TRIGGER_DISTANCE 400 // distance to turn at in mm
+#define TURN_TRIGGER_DISTANCE 500 // distance to turn at in mm
 #define REVERSE_TRIGGER_DISTANCE 100 // distance to reverse and turn at in mm
 #define SLOW_TRIGGER_DISTANCE 500 // distance to slow down at in mm
 
@@ -50,6 +50,7 @@ void setup() {
   // int ssid_hidden = 0;
   // int max_connection = 4;
   // WiFi.softAP("ESP-PAR", "passphrase", channel, ssid_hidden, max_connection, false, WIFI_AUTH_WPA3_PSK);
+  delay(5000); // Start waiting for go!
 }
 
 void loop() {
