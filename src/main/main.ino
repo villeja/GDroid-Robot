@@ -2,8 +2,6 @@
 #include <Wire.h>
 #include <VL53L0X.h>
 
-#include <WiFi.h>
-
 #define PIN_MOTLE_SPD 23
 #define PIN_MOTLE_BAC 22
 #define PIN_MOTLE_FOR 21
@@ -22,7 +20,7 @@
 #define PIN_SCL 7
 
 #define TURN_TRIGGER_DISTANCE 500 // distance to turn at in mm
-#define REVERSE_TRIGGER_DISTANCE 100 // distance to reverse and turn at in mm
+#define REVERSE_TRIGGER_DISTANCE 120 // distance to reverse and turn at in mm
 #define SLOW_TRIGGER_DISTANCE 500 // distance to slow down at in mm
 
 #define SERIAL_BAUDS 19200 // serial baud for debugging
@@ -40,16 +38,11 @@ void setup() {
   Wire.begin(PIN_SDA, PIN_SCL);
   if (initializeSensors() == 404) {
     Serial.println("Sensors failed");
-    while (1) {}
+    ESP.restart();
   }
   // put your setup code here, to run once:
   initializeMotors();
-  // WiFi.mode(WIFI_AP);
-  // delay(10);
-  // int channel = 1;
-  // int ssid_hidden = 0;
-  // int max_connection = 4;
-  // WiFi.softAP("ESP-PAR", "passphrase", channel, ssid_hidden, max_connection, false, WIFI_AUTH_WPA3_PSK);
+
   delay(5000); // Start waiting for go!
 }
 
@@ -57,7 +50,13 @@ void loop() {
   // put your main code here, to run repeatedly:
   for (int i = 0; i < sensorNr; i++) {
     distance[i] = sensors[i].readRangeContinuousMillimeters();
-    if (sensors[i].timeoutOccurred()) { Serial.print(" TIMEOUT"); }
+    if (distance[i] == 65535) { 
+        Serial.print("TIMEOUT"); 
+        sensors[i].timeoutOccurred();
+        safetyStop();
+        ESP.restart();
+        return;
+    }
   }
   driveLogic(distance);
 }
@@ -171,6 +170,11 @@ void driveStop() {
     motorRun(0, 'R');
 }
 
+void safetyStop() {
+    driveStop();
+    Serial.println("We are stopping for our own safety and for the annoyance of others!");
+}
+
 int reverseAtWall(int sensorFront) {
     if (sensorFront < REVERSE_TRIGGER_DISTANCE) {
         driveBackward(255);
@@ -196,8 +200,47 @@ void turnAtCurve(int sensorLeft, int sensorFront, int sensorRight) {
 
 }
 
+void debugDuringDrive(int distance[]) {
+    Serial.print("Sensor distances in order 1 | 2 | 3 : ");
+    Serial.print(distance[0]);
+    Serial.print("\t");
+    Serial.print(distance[1]);
+    Serial.print("\t");
+    Serial.println(distance[2]);
+}
+
 void driveLogic(int sensorReadings[]) {
+    debugDuringDrive(sensorReadings);
     reverseAtWall(sensorReadings[1]);
     turnAtCurve(sensorReadings[0], sensorReadings[1], sensorReadings[2]);
     
+}
+
+void reinitializeSensor(int i) {
+  Serial.print("Reinitializing sensor ");
+  Serial.println(i);
+
+  // Shutdown sensor
+  pinMode(xshutPins[i], OUTPUT);
+  digitalWrite(xshutPins[i], LOW);
+  delay(10);
+
+  // Power it back on
+  pinMode(xshutPins[i], INPUT);
+  delay(10);
+
+  // Re-init sensor
+  sensors[i].setTimeout(500);
+  if (!sensors[i].init()) {
+    Serial.print("Failed to reinit sensor ");
+    Serial.println(i);
+    return;
+  }
+
+  sensors[i].setAddress(0x2A + i);
+  sensors[i].startContinuous();
+
+  Serial.print("Sensor ");
+  Serial.print(i);
+  Serial.println(" reinitialized");
 }
